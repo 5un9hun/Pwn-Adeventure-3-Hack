@@ -1,0 +1,6 @@
+﻿  dllmain.cpp
+C:\Users\SungHun\Downloads\PwnAdventure3_Windows\pwnadventure\pwnadventure\dllmain.cpp(23,23): warning C4018: '<': signed/unsigned mismatch
+C:\Users\SungHun\Downloads\PwnAdventure3_Windows\pwnadventure\pwnadventure\dllmain.cpp(53,10): warning C4996: 'freopen': This function or variable may be unsafe. Consider using freopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Users\SungHun\Downloads\PwnAdventure3_Windows\pwnadventure\pwnadventure\dllmain.cpp(54,10): warning C4996: 'freopen': This function or variable may be unsafe. Consider using freopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Users\SungHun\Downloads\PwnAdventure3_Windows\pwnadventure\pwnadventure\dllmain.cpp(55,10): warning C4996: 'freopen': This function or variable may be unsafe. Consider using freopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  pwnadventure.vcxproj -> C:\Users\SungHun\Downloads\PwnAdventure3_Windows\pwnadventure\Debug\pwnadventure.dll
