@@ -15,7 +15,7 @@ server_queue = []
 client_queue = []
 
 PARSE_CURCUIT = False
-
+FIND_CIRCUIT = False
 fd = None
 
 def parse_circuit(data):
@@ -25,8 +25,18 @@ def parse_circuit(data):
     node_count = struct.unpack('<H', data[4+size+4:4+size+6])[0]
     buf_len = (node_count + 7) >> 3
     output_state = int.from_bytes(data[4+size+6:4+size+6+buf_len], byteorder='big')
-    # print(f'{stage} = {input_state:0{(buf_len!=1): ? 32 : 8}b} | {output_state:0{buf_len*8}b}')
-    return input_state, output_state
+    if stage == 'FinalStage':
+        tmp = bin(input_state)[2:].rjust(32, '0')[1::2]
+        if f'{output_state:0176b}'[:6] == '000000':
+            print("\n=======================================================================")
+            print()
+            print(f"\t[*] Find INPUT: {input_state:032b}")
+            print()
+            print("=======================================================================")
+            global FIND_CIRCUIT
+            FIND_CIRCUIT = True
+        print(f'{stage} = {int(tmp, 2)}')
+    return input_state, output_state, stage, buf_len
 
 class Proxy2Server(Thread):
     def __init__(self, host, port):
@@ -40,25 +50,24 @@ class Proxy2Server(Thread):
     def run(self):
         while True:
             data = self.server.recv(4096)
-            if data and not server_white:
-                if data[0:2] not in server_black:
-                    print(f"[{self.port}] <= {data[:].hex()}")
-            elif data and server_black:
-                if data[0:2] in server_white and PARSE_CURCUIT:
-                    parse_circuit(data)
-                elif(data[0:2] in server_white):
-                    # print(f"[{self.port}] <= {data[:].hex()}")
-                    if fd != None:
-                        _in, _out = parse_circuit(data)
-                        fd.write(f"{_in:032b}|{_out:0176b}" + '\n')
-                    # print(f"{int.from_bytes(data[20-2-4:20-2], byteorder='little'):0176b}")
-            try:
-                if len(client_queue):
-                    self.client.sendall(client_queue.pop(0))
+            if data:
+                if server_black and not server_white:
+                    if data[0:2] not in server_black:
+                        print(f"[client:{self.port}] <= {data[:].hex()}")
+                elif server_white:
+                    if data[0:2] in server_white and PARSE_CURCUIT:
+                        _in, _out, stage, buf_len = parse_circuit(data)
+                        print(f'{stage} = {_in:0{32 if buf_len != 1 else 8}b}|{_in:0{buf_len*8}b}')
+                    elif(data[0:2] in server_white):
+                        if fd != None:
+                            _in, _out, _, _ = parse_circuit(data)
+                            fd.write(f"{_in:032b}|{_out:0176b}" + '\n')
+                try:
+                    if len(client_queue) > 0:
+                        self.client.sendall(client_queue.pop(0))
+                except Exception as e:
+                    pass
                 self.client.sendall(data)
-            except Exception as e:
-                pass
-                # print(f"server_err: {e}")
 
 class Client2Proxy(Thread):
     def __init__(self, host, port):
@@ -75,22 +84,21 @@ class Client2Proxy(Thread):
     def run(self):
         while True:
             data = self.client.recv(4096)
-            if data and not client_white:
-                if data[0:2] not in client_black:
-                    print(f"[{self.port}] => {data[:].hex()}")
-            elif data and client_white:
-                if data[0:2] in server_white and PARSE_CURCUIT:
+            if data:
+                if not client_white:
+                    if data[0:2] not in client_black:
+                        print(f"[server:{self.port}] => {data[:].hex()}")
+                elif client_white:
+                    if data[0:2] in server_white and PARSE_CURCUIT:
+                        pass
+                    elif data[0:2] in client_white:
+                        print(f"[server:{self.port}] => {data[:].hex()}")
+                try:
+                    if len(server_queue) > 0:
+                        self.server.sendall(server_queue.pop(0))
+                except Exception as e:
                     pass
-                elif data[0:2] in client_white:
-                    print(f"[{self.port}] => {data[:].hex()}")
-            try:
-                if len(server_queue):
-                    self.server.sendall(server_queue.pop(0))
                 self.server.sendall(data)
-            except Exception as e:
-                pass
-                # print(f"client_err: {e}")
-
 
 class Proxy(Thread):
     def __init__(self, from_host, to_host, port):
@@ -107,13 +115,13 @@ class Proxy(Thread):
             self.c2p.server = self.p2s.server
             self.p2s.client = self.c2p.client
             self.running = True
-
             self.c2p.start()
             self.p2s.start()
 
 if __name__ == "__main__":
     game_servers = []
-    for port in range(3003, 3004):
+    PORT = 3000
+    for port in range(PORT, PORT+11):
         _game_server = Proxy('0.0.0.0', '127.0.0.1', port)
         _game_server.start()
         game_servers.append(_game_server)
@@ -166,7 +174,7 @@ if __name__ == "__main__":
                             struct.pack('<fff', -2.6102295, 90.32108, 0)
                     ]
                 time.sleep(1)
-                server_queue += [pak := 
+                c += [pak := 
                         b'\x6d\x76' +
                             struct.pack('<fff', egg[9][0], egg[9][1], egg[9][2]) +
                             b'\x00\x00' * 3 +
@@ -174,28 +182,32 @@ if __name__ == "__main__":
                         b'\x65\x65' + 
                             struct.pack('<I', 0xb+9)
                     ]
-            elif(cmd == "circuit"):
+            elif(cmd == "circuit_log"):
                 PARSE_CURCUIT = True
-
-            elif(cmd == "stage1"):
-                server_queue += [bytes.fromhex('3031060053746167653100000000')]
-            elif(cmd == "stage2"):
-                server_queue += [bytes.fromhex('3031060053746167653203000000')]
-            elif(cmd == "stage3"):
-                server_queue += [bytes.fromhex('3031060053746167653300000000')]
-            elif(cmd == "stage4"):
-                server_queue += [bytes.fromhex('3031060053746167653402000000')]
+            elif(cmd == "stage"):
+                server_queue += [bytes.fromhex('3031060053746167653100000000')] # stage1
+                time.sleep(0.4)
+                server_queue += [bytes.fromhex('3031060053746167653203000000')] # stage2
+                time.sleep(0.4)
+                server_queue += [bytes.fromhex('3031060053746167653300000000')] # stage3
+                time.sleep(0.4)
+                server_queue += [bytes.fromhex('3031060053746167653402000000')] # stage4
             elif(cmd == "final"):
                 # fd = open('training.data', 'a')
+                PARSE_CURCUIT = True
                 packet = '30310a0046696e616c5374616765'
                 pattern = '0_1_1_0_1_0_1_1_1_1_1_1_1_1_1_1_'
-                for d in product([0, 1], repeat=16):
+                for i in range(0x10000):
+                    if FIND_CIRCUIT:
+                        server_queue = []
+                        break
+                    d = f'{i:016b}'
                     bf = int(pattern.replace('_', '{}').format(*d), 2)
-                    if len(server_queue) < 1000:
-                        server_queue += [bytes.fromhex(packet) + struct.pack('>I', bf)]
-                    time.sleep(0.01)
-            elif(cmd[:4] == "3031"):
-                server_queue += [bytes.fromhex(cmd)]
+                    server_queue += [bytes.fromhex(packet) + struct.pack('<I', bf)]
+                    time.sleep(0.4)
+                # i == 37660 == 0b01101001100011111010101111111010
+            elif(cmd[:3] == "cmd"):
+                server_queue += [bytes.fromhex(cmd[4:])]
         except KeyboardInterrupt:
             os._exit(0)
         except Exception as e:
